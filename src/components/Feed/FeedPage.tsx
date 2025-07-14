@@ -2,8 +2,110 @@ import React, { useState, useEffect } from 'react';
 import { Sparkles, TrendingUp, Loader2 } from 'lucide-react';
 import CreatePost from './CreatePost';
 import PostCard from './PostCard';
-import apiService, { PostResponse } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+
+// API Service para posts
+const API_BASE_URL = 'http://localhost:8080/api';
+
+class PostApiService {
+  private baseURL: string;
+  private token: string | null = null;
+
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
+    this.token = localStorage.getItem('token');
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && { Authorization: `Bearer ${this.token}` }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    const response = await fetch(url, config);
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  async getPosts(page = 0, size = 10) {
+    return this.request<PostsResponse>(`/posts?page=${page}&size=${size}`);
+  }
+
+  async createPost(content: string, imageUrl?: string) {
+    return this.request<PostResponse>('/posts', {
+      method: 'POST',
+      body: JSON.stringify({ content, imageUrl }),
+    });
+  }
+
+  async deletePost(id: string) {
+    return this.request<void>(`/posts/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async toggleLike(postId: string) {
+    return this.request<{ isLiked: boolean; message: string }>(`/likes/toggle/${postId}`, {
+      method: 'POST',
+    });
+  }
+
+  async createComment(content: string, postId: string) {
+    return this.request<CommentResponse>('/comments', {
+      method: 'POST',
+      body: JSON.stringify({ content, postId }),
+    });
+  }
+}
+
+// Types
+interface PostResponse {
+  id: number;
+  content: string;
+  imageUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  user: UserResponse;
+  likesCount: number;
+  commentsCount: number;
+  isLikedByCurrentUser: boolean;
+}
+
+interface PostsResponse {
+  content: PostResponse[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
+interface UserResponse {
+  id: number;
+  name: string;
+  email: string;
+  avatarUrl?: string;
+  createdAt: string;
+  postsCount: number;
+}
+
+interface CommentResponse {
+  id: number;
+  content: string;
+  createdAt: string;
+  user: UserResponse;
+  postId: number;
+}
 
 interface Post {
   id: string;
@@ -43,9 +145,11 @@ function convertPostResponse(postResponse: PostResponse): Post {
     timestamp: postResponse.createdAt,
     likes: postResponse.likesCount,
     isLiked: postResponse.isLikedByCurrentUser,
-    comments: [] // Será carregado separadamente se necessário
+    comments: []
   };
 }
+
+const postApiService = new PostApiService(API_BASE_URL);
 
 export default function FeedPage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -58,7 +162,7 @@ export default function FeedPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await apiService.getPosts(0, 20);
+      const response = await postApiService.getPosts(0, 20);
       const convertedPosts = response.content.map(convertPostResponse);
       setPosts(convertedPosts);
     } catch (err) {
@@ -75,7 +179,7 @@ export default function FeedPage() {
 
   const handleCreatePost = async (content: string, image?: string) => {
     try {
-      const newPostResponse = await apiService.createPost(content, image);
+      const newPostResponse = await postApiService.createPost(content, image);
       const newPost = convertPostResponse(newPostResponse);
       setPosts([newPost, ...posts]);
     } catch (err) {
@@ -86,7 +190,7 @@ export default function FeedPage() {
 
   const handleLike = async (postId: string) => {
     try {
-      const response = await apiService.toggleLike(postId);
+      const response = await postApiService.toggleLike(postId);
       
       setPosts(posts.map(post => {
         if (post.id === postId) {
@@ -105,9 +209,8 @@ export default function FeedPage() {
 
   const handleComment = async (postId: string, commentContent: string) => {
     try {
-      await apiService.createComment(commentContent, postId);
-      // Recarregar o post para obter comentários atualizados
-      // Por simplicidade, vamos apenas simular a adição do comentário
+      await postApiService.createComment(commentContent, postId);
+      
       setPosts(posts.map(post => {
         if (post.id === postId) {
           const newComment = {
@@ -140,7 +243,7 @@ export default function FeedPage() {
 
   const handleDeletePost = async (postId: string) => {
     try {
-      await apiService.deletePost(postId);
+      await postApiService.deletePost(postId);
       setPosts(posts.filter(post => post.id !== postId));
     } catch (err) {
       console.error('Failed to delete post:', err);

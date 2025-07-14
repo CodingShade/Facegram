@@ -11,6 +11,118 @@ interface User {
   location?: string;
   joinDate: string;
   friendsCount: number;
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+
+// API Service
+const API_BASE_URL = 'http://localhost:8080/api';
+
+class ApiService {
+  private baseURL: string;
+  private token: string | null = null;
+
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
+    this.token = localStorage.getItem('token');
+  }
+
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && { Authorization: `Bearer ${this.token}` }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    try {
+      const response = await fetch(url, config);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
+  }
+
+  setToken(token: string) {
+    this.token = token;
+    localStorage.setItem('token', token);
+  }
+
+  clearToken() {
+    this.token = null;
+    localStorage.removeItem('token');
+  }
+
+  async login(email: string, password: string) {
+    return this.request<AuthResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  async register(userData: RegisterData) {
+    return this.request<AuthResponse>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData),
+    });
+  }
+
+  async getCurrentUser() {
+    return this.request<UserResponse>('/users/me');
+  }
+
+  async updateUser(id: string, userData: Partial<UserResponse>) {
+    return this.request<UserResponse>(`/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(userData),
+    });
+  }
+}
+
+// Types
+interface AuthResponse {
+  token: string;
+  type: string;
+  user: UserResponse;
+}
+
+interface UserResponse {
+  id: number;
+  name: string;
+  email: string;
+  bio?: string;
+  location?: string;
+  avatarUrl?: string;
+  coverPhotoUrl?: string;
+  createdAt: string;
+  postsCount: number;
+}
+
+interface RegisterData {
+  name: string;
+  email: string;
+  password: string;
+}
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  coverPhoto?: string;
+  bio?: string;
+  location?: string;
+  joinDate: string;
+  friendsCount: number;
   postsCount: number;
 }
 
@@ -20,10 +132,13 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, avatarUrl?: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<boolean>;
+  updateProfile: (data: Partial<User>) => Promise<boolean>;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const apiService = new ApiService(API_BASE_URL);
 
 function convertUserResponse(userResponse: UserResponse): User {
   return {
@@ -39,10 +154,33 @@ function convertUserResponse(userResponse: UserResponse): User {
     postsCount: userResponse.postsCount || 0
   };
 }
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Verificar se há token salvo ao inicializar
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      setIsLoading(true);
+      apiService.setToken(token);
+      apiService.getCurrentUser()
+        .then(userResponse => {
+          setUser(convertUserResponse(userResponse));
+        })
+        .catch(() => {
+          // Token inválido, limpar
+          localStorage.removeItem('token');
+          apiService.clearToken();
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
+  }, []);
 
   // Verificar se há token salvo ao inicializar
   useEffect(() => {
@@ -73,6 +211,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       apiService.setToken(response.token);
       setUser(convertUserResponse(response.user));
       return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      return false;
+    } finally {
     } catch (error) {
       console.error('Login failed:', error);
       return false;
@@ -110,10 +252,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     } catch (error) {
       console.error('Registration failed:', error);
-      return false;
     } finally {
-      setIsLoading(false);
-    }
+
+  const updateProfile = async (data: Partial<User>): Promise<boolean> => {
+  const register = async (name: string, email: string, password: string, avatarUrl?: string): Promise<boolean> => {
+    
+    setIsLoading(true);
+      
+      const updatedUser = await apiService.updateUser(user.id, updateData);
+      setUser(convertUserResponse(updatedUser));
+      return true;
+    } catch (error) {
+      console.error('Profile update failed:', error);
+      return false;
+    try {
+      const registerData = { name, email, password };
+      const response = await apiService.register(registerData);
+      
+      apiService.setToken(response.token);
+      
+      // Se foi fornecida uma URL de avatar, atualizar o perfil
+      if (avatarUrl) {
+        try {
+          const updatedUser = await apiService.updateUser(response.user.id.toString(), {
+            ...response.user,
+            avatarUrl
+          });
+          setUser(convertUserResponse(updatedUser));
+        } catch (updateError) {
+          console.error('Failed to update avatar:', updateError);
+          // Mesmo se falhar ao atualizar o avatar, o usuário foi criado com sucesso
+          setUser(convertUserResponse(response.user));
+        }
+      } else {
+        setUser(convertUserResponse(response.user));
+      }
+      
+      return true;
+    } catch (error) {
+      return false;
   };
 
   const updateProfile = async (data: Partial<User>): Promise<boolean> => {
@@ -143,6 +320,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    apiService.clearToken();
     apiService.clearToken();
     setUser(null);
   };
