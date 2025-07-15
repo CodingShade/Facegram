@@ -8,7 +8,6 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, avatarUrl?: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<boolean>;
-  updateProfile: (data: Partial<User>) => Promise<boolean>;
   isLoading: boolean;
 }
 
@@ -169,49 +168,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const updateProfile = async (data: Partial<User>): Promise<boolean> => {
-    if (!user) return false;
-
-    try {
-      const updateData = {
-        name: data.name || user.name,
-        bio: data.bio,
-        location: data.location,
-        avatarUrl: data.avatar,
-        coverPhotoUrl: data.coverPhoto
-      };
-
-      const response = await fetch(`http://localhost:8080/api/users/${user.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(updateData)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
-      }
-
-      const updatedUser = await response.json();
-      
-      const convertedUser: User = {
-        ...user,
-        name: updatedUser.name,
-        bio: updatedUser.bio,
-        location: updatedUser.location,
-        avatar: updatedUser.avatarUrl || user.avatar,
-        coverPhoto: updatedUser.coverPhotoUrl
-      };
-      
-      setUser(convertedUser);
-      return true;
-    } catch (error) {
-      console.error('Profile update failed:', error);
-      return false;
-    }
-  };
 
   return (
     <AuthContext.Provider value={{ user, login, register, logout, updateProfile, isLoading }}>
