@@ -17,7 +17,7 @@ export default function RegisterForm({ onToggleMode }: RegisterFormProps) {
   const [avatarUrl, setAvatarUrl] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const { register, updateProfile, isLoading } = useAuth();
+  const { register, isLoading } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,7 +44,7 @@ export default function RegisterForm({ onToggleMode }: RegisterFormProps) {
       return;
     }
 
-    const success = await registerWithAvatar(name, email, password, avatarUrl || undefined);
+    const success = await register(name, email, password, avatarUrl || undefined);
     if (!success) {
       setError('Erro ao criar conta. Verifique se o email já não está em uso.');
     }
