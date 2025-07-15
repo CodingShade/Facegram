@@ -251,6 +251,20 @@ export default function FeedPage() {
     }
   };
 
+  const handleUpdatePost = async (postId: string, content: string, imageUrl?: string) => {
+    try {
+      const updatedPostResponse = await postApiService.updatePost(postId, content, imageUrl);
+      const updatedPost = convertPostResponse(updatedPostResponse);
+      
+      setPosts(posts.map(post => 
+        post.id === postId ? updatedPost : post
+      ));
+    } catch (err) {
+      console.error('Failed to update post:', err);
+      setError('Erro ao atualizar post. Tente novamente.');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="max-w-4xl mx-auto py-8 px-4">
@@ -352,6 +366,7 @@ export default function FeedPage() {
               onLike={handleLike}
               onComment={handleComment}
               onDelete={handleDeletePost}
+              onUpdate={handleUpdatePost}
             />
           ))
         )}

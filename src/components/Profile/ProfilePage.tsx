@@ -385,6 +385,17 @@ export default function ProfilePage() {
                     onLike={handleLike}
                     onComment={handleComment}
                     onDelete={handleDeletePost}
+                    onUpdate={async (postId: string, content: string, imageUrl?: string) => {
+                      try {
+                        const updatedPostResponse = await apiService.updatePost(postId, content, imageUrl);
+                        const updatedPost = convertPostResponse(updatedPostResponse);
+                        setPosts(posts.map(post => 
+                          post.id === postId ? updatedPost : post
+                        ));
+                      } catch (err) {
+                        console.error('Failed to update post:', err);
+                      }
+                    }}
                   />
                 ))
               )}
